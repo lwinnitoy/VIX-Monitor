@@ -1,0 +1,20 @@
+name: VIX Monitor
+on:
+  schedule:
+    - cron: '0 14 * * *'  # 2pm UTC daily (9am EST)
+  workflow_dispatch:  # Manual trigger button
+
+jobs:
+  check-vix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python vix_monitor.py
+        env:
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
