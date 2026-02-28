@@ -1,4 +1,8 @@
 name: VIX Monitor
+
+permissions:
+  contents: write
+  
 on:
   schedule:
     - cron: '0 14 * * *'  # 2pm UTC daily (9am EST)
@@ -8,10 +12,29 @@ jobs:
   check-vix:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Fetch `last_purchase.json` from `data` branch (if present)
+        run: |
+          git fetch origin data || true
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git show origin/data:data/last_purchase.json > last_purchase.json 2>/dev/null || true
+          fi
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+      - name: Show last_purchase.json if present
+        run: |
+          if [ -f last_purchase.json ]; then
+            echo "--- last_purchase.json ---"
+            cat last_purchase.json
+            echo "--------------------------"
+          else
+            echo "last_purchase.json not found"
+          fi
       - run: pip install -r requirements.txt
       - name: Run tests
         run: python -m unittest test_vix_monitor.py
@@ -20,3 +43,30 @@ jobs:
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+
+      - name: Show last_purchase.json after run
+        run: |
+          if [ -f last_purchase.json ]; then
+            echo "--- last_purchase.json (after run) ---"
+            cat last_purchase.json
+            echo "-------------------------------------"
+          else
+            echo "last_purchase.json not found after run"
+          fi
+
+      - name: Push last_purchase.json to `data` branch (if present)
+        run: |
+          if [ ! -f last_purchase.json ]; then
+            echo "last_purchase.json not present; skipping data branch push"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan tmp-data
+          git rm -rf . || true
+          mkdir -p data
+          cp last_purchase.json data/last_purchase.json
+          git add data/last_purchase.json
+          git commit -m "Persist last_purchase.json [ci skip]" || echo "no changes to commit"
+          git push --force origin HEAD:data
+          git checkout -
