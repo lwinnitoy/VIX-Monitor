@@ -5,6 +5,7 @@ Checks VIX daily and sends notifications when thresholds are met
 
 import yfinance as yf
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import json
 import os
 import smtplib
@@ -13,10 +14,8 @@ from email.mime.multipart import MIMEMultipart
 
 # Configuration
 VIX_THRESHOLDS = {
-    25: 0.5,  # VIX 25-29: Buy 0.5 months worth
     30: 1.0,  # VIX 30-39: Buy 1 month worth
     40: 2.0,  # VIX 40-49: Buy 2 months worth
-    50: 3.0   # VIX 50+: Buy 3 months worth
 }
 
 COOLDOWN_DAYS = 30  # Days between VIX-triggered purchases
@@ -40,23 +39,32 @@ def get_last_purchase_date():
         try:
             with open(LAST_PURCHASE_FILE, 'r') as f:
                 data = json.load(f)
-                return datetime.fromisoformat(data['date'])
-        except:
+                date_str = data.get('date')
+                if not date_str:
+                    return None
+                dt = datetime.fromisoformat(date_str)
+                # If stored datetime is naive, assume America/Los_Angeles
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=ZoneInfo('America/Los_Angeles'))
+                return dt.astimezone(ZoneInfo('America/Los_Angeles'))
+        except Exception:
             return None
     return None
 
 def save_purchase_date():
     """Save current date as last purchase date"""
+    now = datetime.now(ZoneInfo('America/Los_Angeles'))
     with open(LAST_PURCHASE_FILE, 'w') as f:
-        json.dump({'date': datetime.now().isoformat()}, f)
+        json.dump({'date': now.isoformat()}, f)
 
 def is_cooldown_active():
     """Check if we're still in cooldown period"""
     last_purchase = get_last_purchase_date()
     if last_purchase is None:
         return False
-    
-    days_since = (datetime.now() - last_purchase).days
+
+    now = datetime.now(ZoneInfo('America/Los_Angeles'))
+    days_since = (now - last_purchase).days
     return days_since < COOLDOWN_DAYS
 
 def calculate_buy_amount(vix_value):
@@ -103,7 +111,7 @@ This notification has a {COOLDOWN_DAYS}-day cooldown. You won't receive another 
 
 ---
 Automated VIX Monitor System
-{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+{datetime.now(ZoneInfo('America/Los_Angeles')).strftime('%Y-%m-%d %H:%M:%S')}
 """
     
     # Convert to str after checking for None
@@ -170,7 +178,8 @@ def main():
     if is_cooldown_active():
         last_purchase = get_last_purchase_date()
         if last_purchase is not None:
-            days_remaining = COOLDOWN_DAYS - (datetime.now() - last_purchase).days
+            now = datetime.now(ZoneInfo('America/Los_Angeles'))
+            days_remaining = COOLDOWN_DAYS - (now - last_purchase).days
             print(f"⏳ Cooldown active: {days_remaining} days remaining")
             print("   No alerts will be sent until cooldown expires.\n")
         else:

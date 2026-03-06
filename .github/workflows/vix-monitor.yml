@@ -62,6 +62,8 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # remember current branch (may be HEAD in detached state)
+          ORIGINAL_REF=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
           git checkout --orphan tmp-data
           git rm -rf . || true
           mkdir -p data
@@ -69,4 +71,10 @@ jobs:
           git add data/last_purchase.json
           git commit -m "Persist last_purchase.json [ci skip]" || echo "no changes to commit"
           git push --force origin HEAD:data
-          git checkout -
+          # try to return to the original branch if available
+          if [ -n "$ORIGINAL_REF" ] && [ "$ORIGINAL_REF" != "HEAD" ]; then
+            git checkout "$ORIGINAL_REF" || true
+          else
+            # fall back to a detached checkout so we don't error
+            git checkout --detach || true
+          fi
