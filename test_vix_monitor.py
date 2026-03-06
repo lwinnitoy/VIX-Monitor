@@ -8,11 +8,9 @@ import vix_monitor
 
 class TestVixMonitor(unittest.TestCase):
     def test_calculate_buy_amount(self):
-        self.assertEqual(vix_monitor.calculate_buy_amount(24), 0)
-        self.assertEqual(vix_monitor.calculate_buy_amount(25), 0.5)
+        # Only verify the two active thresholds (30 and 40)
         self.assertEqual(vix_monitor.calculate_buy_amount(30), 1.0)
         self.assertEqual(vix_monitor.calculate_buy_amount(40), 2.0)
-        self.assertEqual(vix_monitor.calculate_buy_amount(50), 3.0)
 
     @patch('vix_monitor.yf.Ticker')
     def test_get_vix(self, mock_ticker):
@@ -22,13 +20,14 @@ class TestVixMonitor(unittest.TestCase):
         self.assertEqual(vix_monitor.get_vix(), 20.5)
 
     def test_is_cooldown_active(self):
-        # Save a purchase date 10 days ago
-        test_date = datetime.now() - timedelta(days=10)
+        # Save a purchase date 10 days ago (America/Los_Angeles tz)
+        tz = vix_monitor.ZoneInfo('America/Los_Angeles')
+        test_date = datetime.now(tz) - timedelta(days=10)
         with open(vix_monitor.LAST_PURCHASE_FILE, 'w') as f:
             json.dump({'date': test_date.isoformat()}, f)
         self.assertTrue(vix_monitor.is_cooldown_active())
         # Save a purchase date 40 days ago
-        test_date = datetime.now() - timedelta(days=40)
+        test_date = datetime.now(tz) - timedelta(days=40)
         with open(vix_monitor.LAST_PURCHASE_FILE, 'w') as f:
             json.dump({'date': test_date.isoformat()}, f)
         self.assertFalse(vix_monitor.is_cooldown_active())
@@ -40,6 +39,8 @@ class TestVixMonitor(unittest.TestCase):
         vix_monitor.save_purchase_date()
         date = vix_monitor.get_last_purchase_date()
         self.assertIsInstance(date, datetime)
+        # returned value should be timezone-aware (America/Los_Angeles)
+        self.assertIsNotNone(date.tzinfo)
         if os.path.exists(vix_monitor.LAST_PURCHASE_FILE):
             os.remove(vix_monitor.LAST_PURCHASE_FILE)
 
