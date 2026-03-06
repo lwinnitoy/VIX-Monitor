@@ -1,5 +1,3 @@
 yfinance
 requests
 
-# Backport for zoneinfo on older Python versions
-backports.zoneinfo
